@@ -1,0 +1,29 @@
+menu "Smart Plant sensor calibration"
+config SMART_PLANT_CALIBRATED
+    bool "Enable telemetry after entering measured calibration points"
+    default n
+config SMART_PLANT_SOIL_DRY_ADC
+    int "Soil ADC at 0 percent"
+    range 0 4095
+    default 4095
+config SMART_PLANT_SOIL_WET_ADC
+    int "Soil ADC at 100 percent"
+    range 0 4095
+    default 0
+config SMART_PLANT_LIGHT_ADC_A
+    int "Light ADC at calibration point A"
+    range 0 4095
+    default 0
+config SMART_PLANT_LIGHT_LUX_A
+    int "Measured lux at point A"
+    range 0 65535
+    default 0
+config SMART_PLANT_LIGHT_ADC_B
+    int "Light ADC at calibration point B"
+    range 0 4095
+    default 4095
+config SMART_PLANT_LIGHT_LUX_B
+    int "Measured lux at point B"
+    range 0 65535
+    default 1000
+endmenu

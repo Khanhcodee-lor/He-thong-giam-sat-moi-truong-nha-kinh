@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include "sdkconfig.h"
+#include "smart_mesh.h"
+#include "sensor_payload.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -23,6 +26,8 @@ static const char *TAG = "MAIN_APP";
 
 void app_main(void){
     ESP_LOGI(TAG, "Khoi dong he thong SmartPlan");
+
+    ESP_ERROR_CHECK(smart_mesh_init());
 
     // 1. Khởi tạo cảm biến quang trở
     esp_err_t init_result = quangtro_init(&my_adc_handle, QUANGTRO_CHANNEL);
@@ -64,6 +69,7 @@ void app_main(void){
     ESP_LOGI(TAG, "Bat dau doc gia tri toan bo cam bien...");
 
     // Vòng lặp đọc cảm biến định kỳ
+    TickType_t last_wake = xTaskGetTickCount();
     while(1){
 
         // p1: Đọc cảm biến quang trở
@@ -108,13 +114,30 @@ void app_main(void){
 
         if(dht11_read(&nhiet_do, &do_am) == ESP_OK){
             ESP_LOGI(TAG, "Nhiet do: %.1f °C | Do am: %.1f%%", nhiet_do, do_am);
+#ifdef CONFIG_SMART_PLANT_CALIBRATED
+            if (GIA_TRI_ANH_SANG >= 0 && GIA_TRI_DO_AM >= 0) {
+                float lux = sensor_linear_map(GIA_TRI_ANH_SANG,
+                    CONFIG_SMART_PLANT_LIGHT_ADC_A, CONFIG_SMART_PLANT_LIGHT_ADC_B,
+                    CONFIG_SMART_PLANT_LIGHT_LUX_A, CONFIG_SMART_PLANT_LIGHT_LUX_B);
+                float soil = sensor_linear_map(GIA_TRI_DO_AM,
+                    CONFIG_SMART_PLANT_SOIL_DRY_ADC, CONFIG_SMART_PLANT_SOIL_WET_ADC, 0, 100);
+                uint8_t payload[8];
+                if (sensor_payload_encode(nhiet_do, do_am, lux, soil, payload)) {
+                    esp_err_t err = smart_mesh_publish(payload);
+                    if (err == ESP_OK) ESP_LOG_BUFFER_HEX(TAG, payload, sizeof(payload));
+                    else ESP_LOGW(TAG, "Telemetry not sent: %s", esp_err_to_name(err));
+                } else ESP_LOGW(TAG, "Invalid sensor calibration/sample");
+            }
+#else
+            ESP_LOGW(TAG, "Telemetry disabled: configure Smart Plant sensor calibration");
+#endif
         }else{
             ESP_LOGW(TAG, "Khong the doc du lieu tu DHT11");
         }
         
         ESP_LOGI(TAG, "-----------------------------------");
         
-        // Delay 3 giây trước khi đọc chu kỳ tiếp theo
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        // Gửi mỗi 5 giây, không phụ thuộc publication period của Pi.
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(5000));
     }
 }
